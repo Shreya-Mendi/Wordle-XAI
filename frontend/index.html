@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wordle XAI Agent — Multimodal Vision + NLP</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════ HEADER -->
+<header>
+  <div class="header-left">
+    <h1>Wordle XAI</h1>
+    <span class="tagline">Multimodal Vision · NLP · Grad-CAM · Explainable AI</span>
+  </div>
+  <div id="statusBadge" class="status-badge">
+    <span class="dot"></span>
+    <span class="status-text">Connecting…</span>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════ MAIN GRID -->
+<main class="app-grid">
+
+  <!-- ─────────────────────────────────── COLUMN 1: Vision Input -->
+  <section id="visionPanel" class="card" style="position:relative;">
+    <div class="loading-overlay">
+      <div class="loading-spinner-large"></div>
+      <span class="loading-msg">Running vision model…</span>
+    </div>
+
+    <div class="card-title">
+      <h2>Vision Input</h2>
+      <span class="badge-pill badge-vision">Modality 1</span>
+    </div>
+
+    <!-- Tab: Screenshot / Manual -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="screenshot">Screenshot</button>
+      <button class="tab-btn" data-tab="manual">Manual Input</button>
+    </div>
+
+    <!-- Screenshot tab -->
+    <div class="tab-panel active" data-tab="screenshot">
+      <div id="dropZone" class="drop-zone">
+        <span class="upload-icon">📷</span>
+        Drop a Wordle screenshot here<br/>or click to browse
+        <div class="upload-hint">PNG, JPG · Any device or browser screenshot</div>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" />
+
+      <!-- Example screenshots -->
+      <div class="examples-strip">
+        <div class="examples-label">Or try an example:</div>
+        <div class="examples-row" id="examplesRow">
+          <button class="example-thumb" data-src="examples/example_1_opener.png" title="Empty board — ask for best opener">
+            <img src="examples/example_1_opener.png" alt="Empty board" />
+            <span>Opener</span>
+          </button>
+          <button class="example-thumb" data-src="examples/example_2_early.png" title="After 1 guess: CRANE">
+            <img src="examples/example_2_early.png" alt="1 guess" />
+            <span>1 guess</span>
+          </button>
+          <button class="example-thumb" data-src="examples/example_3_mid.png" title="After 2 guesses: CRANE + STORE">
+            <img src="examples/example_3_mid.png" alt="2 guesses" />
+            <span>2 guesses</span>
+          </button>
+          <button class="example-thumb" data-src="examples/example_4_late.png" title="After 3 guesses: narrowing fast">
+            <img src="examples/example_4_late.png" alt="3 guesses" />
+            <span>3 guesses</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="preview-container" id="previewContainer">
+        <img id="boardPreview" alt="Uploaded Wordle screenshot" />
+      </div>
+
+      <button id="analyzeBtn" class="btn btn-primary" disabled>
+        <span>Analyze Screenshot</span>
+        <div class="spinner"></div>
+      </button>
+
+      <div class="legend" style="margin-top:14px;">
+        <div class="legend-item">
+          <div class="legend-dot" style="background:var(--color-correct)"></div>
+          <span>Correct</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:var(--color-present)"></div>
+          <span>Present</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:var(--color-absent)"></div>
+          <span>Absent</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Manual input tab -->
+    <div class="tab-panel" data-tab="manual">
+      <p style="font-size:0.82rem;color:var(--color-text-dim);margin-bottom:12px;">
+        Enter each guess below. Set the state for each letter.
+      </p>
+      <div id="manualBoard" class="manual-board"></div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button id="manualSubmitBtn" class="btn btn-primary" style="flex:1;">
+          Get Suggestions
+        </button>
+        <button id="manualClearBtn" class="btn btn-secondary">
+          Clear
+        </button>
+      </div>
+    </div>
+
+    <!-- Architecture note -->
+    <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border);">
+      <h3>Vision Pipeline</h3>
+      <div style="font-size:0.78rem;color:var(--color-text-dim);line-height:1.7;">
+        <strong style="color:var(--color-text)">1. Grid detection</strong> — OpenCV edge detection + contour analysis<br/>
+        <strong style="color:var(--color-text)">2. State classification</strong> — HSV color thresholding (green/yellow/gray)<br/>
+        <strong style="color:var(--color-text)">3. ResNet18</strong> — Transfer-learned tile state classifier<br/>
+        <strong style="color:var(--color-text)">4. Grad-CAM</strong> — Gradient-weighted activation maps per tile
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────── COLUMN 2: Board + Grad-CAM -->
+  <section class="card" style="position:relative;">
+    <div class="card-title">
+      <h2>Board State</h2>
+      <span class="badge-pill badge-xai">XAI — Vision</span>
+    </div>
+
+    <!-- Reconstructed Wordle board -->
+    <h3>Reconstructed Board</h3>
+    <div id="wordleBoard" class="board-container" style="margin-bottom:20px;">
+      <div class="placeholder">
+        <span class="placeholder-icon">📋</span>
+        Board will appear here after analysis
+      </div>
+    </div>
+
+    <!-- Grad-CAM grid -->
+    <div style="padding-top:14px;border-top:1px solid var(--border);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="margin-bottom:0;">Grad-CAM Heatmaps</h3>
+        <span style="font-size:0.72rem;color:var(--color-text-dim);">Click tile to inspect</span>
+      </div>
+      <div id="gradcamGrid" class="gradcam-grid">
+        <div class="placeholder" style="grid-column:1/-1;">
+          <span class="placeholder-icon">🔥</span>
+          Grad-CAM overlays will appear here
+        </div>
+      </div>
+    </div>
+
+    <!-- Colour legend for heatmap -->
+    <div class="legend" style="margin-top:12px;">
+      <div class="legend-item">
+        <div class="legend-dot" style="background:linear-gradient(90deg,#00f,#0f0,#f00);width:36px;height:12px;border-radius:3px;"></div>
+        <span style="font-size:0.7rem;">Low → High activation</span>
+      </div>
+    </div>
+
+    <!-- Architecture note -->
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+      <h3>How Grad-CAM Works</h3>
+      <div style="font-size:0.78rem;color:var(--color-text-dim);line-height:1.7;">
+        Gradients of the predicted class score w.r.t. the last convolutional
+        layer's feature maps are global-average-pooled to produce channel
+        weights. The weighted sum of activations, passed through ReLU, forms
+        the class-discriminative localization map. <em>Red = highest activation.</em>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────── COLUMN 3: Suggestions + Explanation -->
+  <section id="suggestionPanel" class="card" style="position:relative;">
+    <div class="loading-overlay">
+      <div class="loading-spinner-large"></div>
+      <span class="loading-msg">Computing word suggestions…</span>
+    </div>
+
+    <div class="card-title">
+      <h2>Word Suggestions</h2>
+      <span class="badge-pill badge-nlp">Modality 2</span>
+    </div>
+
+    <!-- Candidates remaining -->
+    <div id="candidatesBar" class="candidates-bar">
+      <span>Remaining candidates:</span>
+      <span class="candidates-count">—</span>
+    </div>
+
+    <!-- Suggestion cards -->
+    <div id="suggestionsList" class="suggestions-list">
+      <div class="placeholder">
+        <span class="placeholder-icon">💡</span>
+        Suggestions will appear after analysis
+      </div>
+    </div>
+
+    <!-- Saliency legend -->
+    <div class="legend" style="margin-top:14px;">
+      <div class="legend-item">
+        <div class="legend-dot" style="background:hsl(200,70%,52%);"></div>
+        <span style="font-size:0.7rem;">Low saliency</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:hsl(140,70%,52%);"></div>
+        <span style="font-size:0.7rem;">High saliency</span>
+      </div>
+    </div>
+
+    <!-- XAI Explanation -->
+    <div style="margin-top:16px;">
+      <h3>XAI Explanation</h3>
+      <div id="explanationBox" class="explanation-box">
+        <span style="opacity:0.5;">Analysis will generate a cross-modal explanation here,
+        connecting the vision model's detections to the solver's recommendations.</span>
+      </div>
+    </div>
+
+    <!-- Architecture note -->
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+      <h3>Solver Algorithm</h3>
+      <div style="font-size:0.78rem;color:var(--color-text-dim);line-height:1.7;">
+        <strong style="color:var(--color-text)">Entropy scoring</strong> — E[guess] = −Σ p_k log₂(p_k) over 3⁵ patterns<br/>
+        <strong style="color:var(--color-text)">Position saliency</strong> — counterfactual ablation per letter position<br/>
+        <strong style="color:var(--color-text)">Constraint filter</strong> — eliminates words violating green/yellow/gray rules<br/>
+        <strong style="color:var(--color-text)">Openers</strong> — pre-scored high-entropy first guesses (CRANE, SLATE…)
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ═══════════════════════════════════════════════════════════ GRAD-CAM MODAL -->
+<div id="camModal" class="modal-backdrop">
+  <div class="modal-content">
+    <div class="modal-title">
+      <span id="modalTitle">Tile Analysis</span>
+      <button id="modalClose" class="modal-close" title="Close">✕</button>
+    </div>
+
+    <div class="modal-images">
+      <div class="modal-img-wrap">
+        <img id="modalOriginal" src="" alt="Original tile" />
+        <div class="modal-img-label">Original Tile</div>
+      </div>
+      <div class="modal-img-wrap">
+        <img id="modalGradcam" src="" alt="Grad-CAM overlay" />
+        <div class="modal-img-label">Grad-CAM Overlay</div>
+      </div>
+    </div>
+
+    <div id="modalDescription" class="modal-description">
+      <!-- Filled dynamically -->
+    </div>
+
+    <div style="margin-top:14px;font-size:0.75rem;color:var(--color-text-dim);">
+      <strong>Interpretation:</strong> Warmer colors (red/yellow) indicate higher gradient-weighted
+      activation — regions the ResNet model focused on when making this prediction.
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

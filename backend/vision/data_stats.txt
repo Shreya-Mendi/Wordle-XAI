@@ -1,0 +1,8 @@
+Per-class pixel statistics (mean/std over 100 random tiles)
+
+Class        Mean R   Mean G   Mean B     Std R   Std G   Std B   Expected RGB
+-------------------------------------------------------------------------------------
+correct        96.2    148.8     92.3      19.8    21.4    22.2   (83, 141, 78)
+present       193.0    164.0     69.9      19.8    21.3    20.5   (181, 159, 59)
+absent         70.1     74.0     73.2      20.5    21.3    18.4   (58, 58, 60)
+empty          22.4     24.9     24.3      18.8    18.1    19.4   (18, 18, 19)
